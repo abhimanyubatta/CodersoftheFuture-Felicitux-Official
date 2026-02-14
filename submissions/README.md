@@ -1,5 +1,1 @@
-# Submissions Folder
-
-Each team must create a folder inside this directory using:
-
-teamname-projectname
+Replacing the style and images files is necessary, and you need to change the maxStyleId variable to 50000 to access the full dataset potential. Download these files at https://www.kaggle.com/datasets/paramaggarwal/fashion-product-images-dataset

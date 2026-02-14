@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Felicitux</title>
+  <link rel="stylesheet" href="main.css">
+</head>
+<body>
+  <div class="swipe-screen">
+    <header class="swipe-header">
+      <h2 class="swipe-title">Browse some picks for you</h2>
+      <p class="swipe-subtitle">   Swipe right to save and left to skip.</p>
+    </header>
+
+    <main>
+      <div class="swipe-loading" id="swipe-loading">
+        <div class="swipe-loading-spinner"></div>
+        <p class="swipe-loading-text">Finding your picks...</p>
+      </div>
+      <div class="swipe-content" id="swipe-content" style="visibility:hidden;">
+        <div class="swipe-card-container"></div>
+        <div class="swipe-actions">
+          <button class="swipe-btn swipe-btn--nope">✕</button>
+          <button class="swipe-btn swipe-btn--like">♥</button>
+        </div>
+        <div class="swipe-progress">
+          <div class="swipe-progress-bar"></div>
+        </div>
+        <div class="swipe-empty" id="swipe-empty" style="display:none;">
+          <p class="swipe-empty-text"></p>
+          <a href="preferences.html" class="cssbuttons-io-button swipe-empty-btn" id="preferences-r">Return to preferences</a>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    var params = new URLSearchParams(window.location.search);
+    var prefs = {
+      gender: (params.get("gender") || "").toLowerCase(),
+      style: (params.get("style") || "").toLowerCase(),
+      size: (params.get("size") || "").toLowerCase(),
+      category: (params.get("category") || "").toLowerCase(),
+      colors: params.getAll("colors").map(function (c) { return c.toLowerCase(); }),
+      priceMin: params.get("priceMin") ? parseFloat(params.get("priceMin")) : null,
+      priceMax: params.get("priceMax") ? parseFloat(params.get("priceMax")) : null
+    };
+
+    var minStyleId = 1163;
+    var maxStyleId = 10000;
+    var styleIds = [];
+    
+    function buildStyleIdsArray() {
+      return new Promise(function(resolve) {
+        for (var sid = minStyleId; sid <= maxStyleId; sid++) {
+          styleIds.push(sid);
+        }
+        resolve();
+      });
+    }
+
+    function mapBaseColourToBucket(colour) {
+      var c = (colour || "").toLowerCase();
+      if (!c) return "";
+      if (c === "na" || c === "n/a") return "";
+      if (c.indexOf("black")!== -1) return "black";
+      if (c.indexOf("white") !== -1) return "white";
+      var neutrals = ["beige", "grey", "gray", "brown", "cream", "khaki", "navy"];
+      for (var i = 0; i < neutrals.length; i++) {
+        if (c.indexOf(neutrals[i]) !== -1) return "neutral";
+      }
+      return "colorful";
+    }
+
+    function getColourBuckets(data) {
+      var buckets = [];
+      if (!data) return buckets;
+      var raw = [data.baseColour, data.colour1, data.colour2];
+      for (var i = 0; i < raw.length; i++) {
+        var b = mapBaseColourToBucket(raw[i]);
+        if (b && buckets.indexOf(b) === -1) buckets.push(b);
+      }
+      return buckets;
+    }
+
+    function mapJsonToProduct(id, json) {
+      if (!json || !json.data) return null;
+      var data = json.data;
+      var genderRaw = (data.gender || "").toLowerCase();
+      var ageGroup = (data.ageGroup || "").toLowerCase();
+      var gender = genderRaw || (ageGroup.indexOf("women") !== -1 || ageGroup.indexOf("girl") !== -1 ? "women" : ageGroup.indexOf("men") !== -1 || ageGroup.indexOf("boy") !== -1 ? "men" : ageGroup.indexOf("unisex") !== -1 ? "unisex" : "");
+      var style = (data.usage || "").toLowerCase();
+      var colourBuckets = getColourBuckets(data);
+      var name = data.productDisplayName || data.variantName || ("Style " + id);
+      var price = data.discountedPrice || data.price || 0;
+      
+      var occasion = "";
+      var displayCategories = (data.displayCategories || "").toLowerCase();
+      if (displayCategories.indexOf("party") !== -1) occasion = "party";
+      else if (displayCategories.indexOf("wedding") !== -1) occasion = "wedding";
+      else if (displayCategories.indexOf("birthday") !== -1) occasion = "birthday";
+      else occasion = "other";
+      
+      var category = "";
+      
+      if (data.articleType && data.articleType.typeName) {
+        var articleTypeName = (data.articleType.typeName || "").toLowerCase();
+        if (articleTypeName.indexOf("shirt") !== -1 || articleTypeName.indexOf("top") !== -1 || articleTypeName.indexOf("t-shirt") !== -1 || articleTypeName.indexOf("tshirt") !== -1 || articleTypeName.indexOf("tee") !== -1) {
+          category = "shirt";
+        } else if (articleTypeName.indexOf("pant") !== -1 || articleTypeName.indexOf("trouser") !== -1 || articleTypeName.indexOf("jean") !== -1 || articleTypeName.indexOf("short") !== -1) {
+          category = "pants";
+        } else if (articleTypeName.indexOf("shoe") !== -1 || articleTypeName.indexOf("sneaker") !== -1 || articleTypeName.indexOf("boot") !== -1 || articleTypeName.indexOf("sandal") !== -1 || articleTypeName.indexOf("slipper") !== -1) {
+          category = "shoes";
+        } else if (articleTypeName.indexOf("accessor") !== -1 || articleTypeName.indexOf("cap") !== -1 || articleTypeName.indexOf("bag") !== -1 || articleTypeName.indexOf("watch") !== -1 || articleTypeName.indexOf("belt") !== -1 || articleTypeName.indexOf("wallet") !== -1 || articleTypeName.indexOf("sunglass") !== -1) {
+          category = "accessories";
+        }
+      }
+      
+      if (!category && data.subCategory && data.subCategory.typeName) {
+        var subCategoryName = (data.subCategory.typeName || "").toLowerCase();
+        if (subCategoryName.indexOf("shirt") !== -1 || subCategoryName.indexOf("top") !== -1) {
+          category = "shirt";
+        } else if (subCategoryName.indexOf("pant") !== -1 || subCategoryName.indexOf("trouser") !== -1 || subCategoryName.indexOf("jean") !== -1) {
+          category = "pants";
+        } else if (subCategoryName.indexOf("shoe") !== -1 || subCategoryName.indexOf("footwear") !== -1) {
+          category = "shoes";
+        } else if (subCategoryName.indexOf("accessor") !== -1 || subCategoryName.indexOf("headwear") !== -1 || subCategoryName.indexOf("bag") !== -1) {
+          category = "accessories";
+        }
+      }
+      
+      if (!category && data.masterCategory && data.masterCategory.typeName) {
+        var masterCategoryName = (data.masterCategory.typeName || "").toLowerCase();
+        if (masterCategoryName.indexOf("accessor") !== -1) {
+          category = "accessories";
+        }
+      }
+      
+      if (!category && displayCategories) {
+        if (displayCategories.indexOf("accessor") !== -1) {
+          category = "accessories";
+        }
+      }
+      
+      if (!category && name) {
+        var nameLower = name.toLowerCase();
+        if (nameLower.indexOf("shirt") !== -1 || nameLower.indexOf("top") !== -1 || nameLower.indexOf("t-shirt") !== -1 || nameLower.indexOf("tshirt") !== -1) {
+          category = "shirt";
+        } else if (nameLower.indexOf("pant") !== -1 || nameLower.indexOf("trouser") !== -1 || nameLower.indexOf("jean") !== -1) {
+          category = "pants";
+        } else if (nameLower.indexOf("shoe") !== -1 || nameLower.indexOf("sneaker") !== -1 || nameLower.indexOf("boot") !== -1 || nameLower.indexOf("sandal") !== -1) {
+          category = "shoes";
+        } else if (nameLower.indexOf("cap") !== -1 || nameLower.indexOf("bag") !== -1 || nameLower.indexOf("watch") !== -1 || nameLower.indexOf("belt") !== -1) {
+          category = "accessories";
+        }
+      }
+      
+      var size = "";
+      if (data.styleOptions && data.styleOptions.length > 0) {
+        var sizeOption = data.styleOptions[0];
+        if (sizeOption && sizeOption.value) {
+          var sizeValue = (sizeOption.value || "").toLowerCase();
+          if (sizeValue.indexOf("small") !== -1 || sizeValue === "s") size = "s";
+          else if (sizeValue.indexOf("medium") !== -1 || sizeValue === "m") size = "m";
+          else if (sizeValue.indexOf("large") !== -1 || sizeValue === "l") size = "l";
+          else if (sizeValue.indexOf("xl") !== -1 || sizeValue === "xl" || sizeValue.indexOf("extra large") !== -1) size = "xl";
+          else if (sizeValue.indexOf("onesize") !== -1 || sizeValue.indexOf("one size") !== -1) size = ""; // No specific size
+        }
+      }
+      
+      var imageUrl = "";
+      if (data.styleImages && data.styleImages.default && data.styleImages.default.imageURL) {
+        imageUrl = data.styleImages.default.imageURL;
+      }
+      return {
+        id: id,
+        name: name,
+        price: price,
+        gender: gender,
+        style: style,
+        size: size,
+        occasion: occasion,
+        category: category,
+        colorBuckets: colourBuckets,
+        tags: [data.brandName || "", data.usage || "", data.baseColour || "", data.colour1 || "", data.colour2 || ""]
+          .filter(function (v) { return v && String(v).toLowerCase() !== "na"; }),
+        image: imageUrl,
+        landingPageUrl: data.landingPageUrl || ""
+      };
+    }
+
+    function matchPrefs(item, prefs) {
+
+      if (prefs.gender) {
+        if (prefs.gender === "women") {
+          if (item.gender === "men") {
+            return false;
+          }
+          if (!item.gender || (item.gender !== "women" && item.gender !== "unisex")) {
+            return false;
+          }
+        } else if (prefs.gender === "men") {
+          if (item.gender === "women") {
+            return false;
+          }
+          if (!item.gender || (item.gender !== "men" && item.gender !== "unisex")) {
+            return false;
+          }
+        } else if (prefs.gender === "unisex") {
+        } else {
+          if (!item.gender || item.gender !== prefs.gender) {
+            return false;
+          }
+        }
+      }
+      
+      if (prefs.gender === "women" && item.name) {
+        var nameLower = item.name.toLowerCase();
+        if (/\b(men|boys?)\b/.test(nameLower)) {
+          return false;
+        }
+      }
+      
+      if (prefs.category) {
+        if (!item.category || item.category !== prefs.category) {
+          return false;
+        }
+      }
+      
+      if (prefs.style) {
+        if (!item.style || item.style !== prefs.style) {
+          return false;
+        }
+      }
+      
+      if (prefs.size) {
+        if (!item.size || item.size !== prefs.size) {
+          return false;
+        }
+      }
+      
+      if (prefs.colors && prefs.colors.length > 0) {
+        if (!item.colorBuckets || item.colorBuckets.length === 0) {
+          return false;
+        }
+        var hasColor = item.colorBuckets.some(function (b) { return prefs.colors.indexOf(b) !== -1; });
+        if (!hasColor) {
+          return false;
+        }
+      }
+      
+      var itemPrice = parseFloat(item.price) || 0;
+      if (prefs.priceMin !== null && itemPrice < prefs.priceMin) {
+        return false;
+      }
+      if (prefs.priceMax !== null && itemPrice > prefs.priceMax) {
+        return false;
+      }
+      
+      return true;
+    }
+
+    function loadProducts(idsToLoad) {
+      var ids = idsToLoad || styleIds;
+      var batchSize = 100;
+      var batches = [];
+      for (var i = 0; i < ids.length; i += batchSize) {
+        batches.push(ids.slice(i, i + batchSize));
+      }
+      
+      var loadBatch = function(batch) {
+        return Promise.all(batch.map(function (id) {
+          return fetch("styles/" + id + ".json").then(function (res) {
+            if (!res.ok) return null;
+            return res.json();
+          }).then(function (json) {
+            return mapJsonToProduct(id, json);
+          }).catch(function () {
+            return null;
+          });
+        }));
+      };
+      
+      var processBatches = function(index, allProducts) {
+        if (index >= batches.length) {
+          return Promise.resolve(allProducts);
+        }
+        return loadBatch(batches[index]).then(function(batchProducts) {
+          var validProducts = batchProducts.filter(function (p) { return p; });
+          allProducts = allProducts.concat(validProducts);
+          return processBatches(index + 1, allProducts);
+        });
+      };
+      
+      return processBatches(0, []);
+    }
+
+    function shuffle(array) {
+      for (var i = array.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var temp = array[i];
+        array[i] = array[j];
+        array[j] = temp;
+      }
+      return array;
+    }
+
+    var index = 0;
+    var queue = [];
+    var liked = [];
+    var maxSwipes = 20;
+    var loadingEl = document.getElementById("swipe-loading");
+    var contentEl = document.getElementById("swipe-content");
+    var container = document.querySelector(".swipe-card-container");
+    var btnLike = document.querySelector(".swipe-btn--like");
+    var btnNope = document.querySelector(".swipe-btn--nope");
+    var emptyEl = document.querySelector(".swipe-empty");
+    var progressBar = document.querySelector(".swipe-progress-bar");
+    var swooshsoundeffect = new Audio("cardswoosh.mp3");
+    swooshsoundeffect.volume = 0.15;
+
+    function hideLoading() {
+      if (loadingEl) loadingEl.classList.add("hidden");
+      if (contentEl) contentEl.style.visibility = "visible";
+    }
+
+    function finishSwiping( ) {
+      try {
+        localStorage.setItem("felicituxLiked", JSON.stringify(liked || []));
+      } catch (e) {
+      
+      }
+      window.location.href = "summary.html";
+    }
+
+    function updateProgress() {
+      if (!progressBar) return;
+      var total = Math.min(queue.length, maxSwipes);
+      if (total === 0) {
+        progressBar.style.width = "0%" ;
+        return;
+      }
+      var current = Math.min(index, total);
+      var percent = (current / total) * 100;
+      progressBar.style.width = percent + "%";
+    }
+<!-- Supa Kool Schtuff aheadd.-->
+    var swipeActions = document.querySelector(".swipe-actions");
+    var swipeProgress = document.querySelector(".swipe-progress");
+
+    function renderCard() {
+      if (queue.length === 0) {
+        emptyEl.style.display = "block";
+        emptyEl.querySelector(".swipe-empty-text").textContent = emptyEl.dataset.message || "No products found matching your preferences.";
+        if (swipeActions) swipeActions.style.display = "none";
+        if (swipeProgress) swipeProgress.style.display = "none";
+        return;
+      }
+      if (index >= queue.length) {
+        finishSwiping();
+        return;
+      }
+      emptyEl.style.display = "none";
+      if (swipeActions) swipeActions.style.display = "flex";
+      if (swipeProgress) swipeProgress.style.display = "block";
+      btnLike.disabled = false;
+      btnNope.disabled = false;
+      var item = queue[index];
+      container.innerHTML =
+        '<article class="swipe-card">' +
+        '<img class="swipe-image" src="' + item.image + '" alt="' + item.name + '">' +
+        '<div class="swipe-meta">' +
+        '<div class="swipe-meta-main">' +
+        '<div class="swipe-name">' + item.name + "</div>" +
+        '<div class="swipe-price">₹' + item.price + "</div>" +
+        "</div>" +
+        '<div class="swipe-tags">' + item.tags.join(" · ") + "</div>" +
+        "</div>" +
+        "</article>";
+      updateProgress();
+    }
+
+    function swipe(direction) {
+      var card = container.querySelector(".swipe-card");
+      if (!card) return;
+      if (direction ==="like") {
+        liked.push(queue[index]) ;
+        card.classList.add("swipe-card--like");
+      } else {
+        card.classList.add("swipe-card--nope");
+      }
+      setTimeout(function () {
+        index += 1;
+        renderCard();
+      }, 220);
+    }
+
+    btnLike.addEventListener("click", function () {
+      swipe("like");
+      swooshsoundeffect.play();
+    });
+
+    btnNope.addEventListener("click", function () {
+      swipe("nope");
+      swooshsoundeffect.play();
+    });
+
+    document.addEventListener("keydown", function (event) {
+      if (event.key=== "ArrowRight") swipe("like");
+      if (event.key==="ArrowLeft") swipe("nope");
+    });
+
+    buildStyleIdsArray().then(function() {
+      return loadProducts();
+    }).then(function (products) {
+      if (!products || products.length === 0) {
+        queue = [];
+        emptyEl.dataset.message = "No products found matching your preferences.";
+      } else {
+        var filtered = products.filter(function (p) {
+          return matchPrefs(p, prefs);
+        });
+        if (filtered.length === 0) {
+          queue = [];
+          emptyEl.dataset.message = "No products found matching your preferences. Please adjust your selections.";
+        } else {
+          var seen = {};
+          var deduped = filtered.filter(function (p) {
+            var key = (p.name || "") + "|" + (p.image || "");
+            if (seen[key]) return false;
+            seen[key] = true;
+            return true;
+          });
+          queue = shuffle(deduped).slice(0, maxSwipes);
+        }
+      }
+      hideLoading();
+      index = 0;
+      renderCard();
+    });
+  </script>
+</body>
+<iframe 
+  src="music.html" 
+  style="position:fixed; width:0; height:0; border:0; visibility:hidden;">
+</iframe>
+
+</html>
+
